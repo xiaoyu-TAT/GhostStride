@@ -14,6 +14,7 @@ import SwiftData
     var kmh: Double = UserDefaults.standard.object(forKey: "defaultSpeed") as? Double ?? 8
     var previewRate = 1.0
     var loops = false
+    /// 应用层默认启用自然运动模拟；用户可在播放面板中关闭以使用恒定速度。
     var realisticMotion = true
     var sessionSaved = false
     @ObservationIgnored private var ticker: Task<Void, Never>?
@@ -34,6 +35,8 @@ import SwiftData
     func resume() { configure(); engine.resume(now: ProcessInfo.processInfo.systemUptime); runTicker() }
     func stop() { engine.stop(now: ProcessInfo.processInfo.systemUptime); cancelTicker(); publish() }
     func reset() { cancelTicker(); engine.reset(); sessionSaved = false; publish() }
+    /// 将引擎的位置和瞬时速度发布为本应用自己的 MockLocationProvider 数据。
+    /// 这里不会写入系统级 Core Location，也不会影响其他 App。
     private func publish() { if let p = engine.simulatedPosition { mock.update(p, speed: engine.state == .running ? engine.currentSpeed : 0) } }
     private func runTicker() {
         guard ticker == nil, engine.state == .running else { return }
