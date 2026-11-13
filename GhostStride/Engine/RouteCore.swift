@@ -50,6 +50,40 @@ struct RouteGeometry: Sendable {
         guard let p = position(at: meters) else { return [] }
         return zip(points,cumulative).filter { $0.1 < meters }.map(\.0) + [p]
     }
+    func turnFactor(at meters: Double) -> Double {
+        guard points.count > 2, distance > 0 else { return 1 }
+        let d = min(distance, max(0, meters))
+        var index = 1
+        while index < cumulative.count - 1 && cumulative[index] < d { index += 1 }
+        let incoming = localVector(from: points[index - 1], to: points[index])
+        let outgoing = localVector(from: points[index], to: points[min(index + 1, points.count - 1)])
+        let incomingLength = hypot(incoming.x, incoming.y)
+        let outgoingLength = hypot(outgoing.x, outgoing.y)
+        guard incomingLength > 0, outgoingLength > 0 else { return 1 }
+        let cosine = max(-1, min(1, (incoming.x * outgoing.x + incoming.y * outgoing.y) / (incomingLength * outgoingLength)))
+        let turn = acos(cosine) / .pi
+        return max(0.65, 1 - turn * 0.35)
+    }
+    func offsetPosition(at meters: Double, lateralMeters: Double) -> GeoPoint? {
+        guard let point = position(at: meters), lateralMeters.isFinite else { return point }
+        let d = min(distance, max(0, meters))
+        let next = position(at: min(distance, d + 2))
+        guard let next else { return point }
+        let vector = localVector(from: point, to: next)
+        let length = hypot(vector.x, vector.y)
+        guard length > 0 else { return point }
+        let east = -vector.y / length * lateralMeters
+        let north = vector.x / length * lateralMeters
+        let latitude = point.latitude + north / 111_000
+        let longitudeScale = max(0.01, cos(point.latitude * .pi / 180))
+        let longitude = point.longitude + east / (111_000 * longitudeScale)
+        return GeoPoint(latitude: latitude, longitude: longitude)
+    }
+    private func localVector(from: GeoPoint, to: GeoPoint) -> (x: Double, y: Double) {
+        let latitudeScale = 111_000.0
+        let longitudeScale = latitudeScale * max(0.01, cos(from.latitude * .pi / 180))
+        return (x: (to.longitude - from.longitude) * longitudeScale, y: (to.latitude - from.latitude) * latitudeScale)
+    }
 }
 
 enum MotionPreset: String, CaseIterable, Identifiable {
@@ -69,19 +103,26 @@ struct SimulationEngine: Sendable {
     private(set) var state: SimulationState = .idle
     private(set) var elapsed = 0.0
     private(set) var traveled = 0.0
+    private(set) var currentSpeed = 0.0
     private var lastTick: Double?
     var kmh = 8.0
     var previewRate = 1.0
     var loops = false
+    var realisticMotion = false
     var lapDistance: Double {
         guard geometry.distance > 0 else { return 0 }
         return loops ? traveled.truncatingRemainder(dividingBy: geometry.distance) : min(traveled, geometry.distance)
     }
     var position: GeoPoint? { geometry.position(at: lapDistance) }
+    var simulatedPosition: GeoPoint? {
+        guard realisticMotion, let position = position else { return self.position }
+        let lateral = sin(elapsed * 0.75) * 0.8 + sin(elapsed * 1.9) * 0.25
+        return geometry.offsetPosition(at: lapDistance, lateralMeters: lateral)
+    }
     var remaining: Double { max(0, geometry.distance-lapDistance) }
     var remainingSeconds: Double { kmh > 0 ? remaining/(kmh/3.6) : 0 }
     mutating func load(_ points: [GeoPoint]) { geometry = RouteGeometry(points); reset() }
-    mutating func reset() { state = .idle; elapsed = 0; traveled = 0; lastTick = nil }
+    mutating func reset() { state = .idle; elapsed = 0; traveled = 0; currentSpeed = 0; lastTick = nil }
     mutating func start(now: Double) {
         guard now.isFinite, !geometry.points.isEmpty else { return }
         reset()
@@ -93,12 +134,22 @@ struct SimulationEngine: Sendable {
         lastTick = now
         guard kmh.isFinite, kmh > 0, previewRate.isFinite, previewRate > 0 else { return }
         let dt = (now-old) * min(5, previewRate)
-        let speed = min(200, kmh) / 3.6
-        let used = loops ? dt : min(dt, max(0, geometry.distance-traveled)/speed)
+        let baseSpeed = min(200, kmh) / 3.6
+        let targetSpeed = realisticMotion ? baseSpeed * geometry.turnFactor(at: lapDistance) : baseSpeed
+        let speed: Double
+        if realisticMotion {
+            let acceleration = targetSpeed >= currentSpeed ? 0.9 : 1.3
+            currentSpeed += min(acceleration * dt, abs(targetSpeed - currentSpeed)) * (targetSpeed >= currentSpeed ? 1 : -1)
+            speed = currentSpeed
+        } else {
+            currentSpeed = baseSpeed
+            speed = baseSpeed
+        }
+        let used = loops ? dt : min(dt, max(0, geometry.distance-traveled)/max(speed, 0.001))
         elapsed += used; traveled += used*speed
         if !loops && traveled >= geometry.distance - 1e-7 { traveled = geometry.distance; state = .finished; lastTick = nil }
     }
     mutating func pause(now: Double) { advance(now: now); if state == .running { state = .paused }; lastTick = nil }
     mutating func resume(now: Double) { guard state == .paused, now.isFinite else { return }; state = .running; lastTick = now }
-    mutating func stop(now: Double) { advance(now: now); state = .stopped; lastTick = nil }
+    mutating func stop(now: Double) { advance(now: now); state = .stopped; currentSpeed = 0; lastTick = nil }
 }

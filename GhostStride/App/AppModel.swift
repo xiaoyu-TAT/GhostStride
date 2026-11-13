@@ -14,6 +14,7 @@ import SwiftData
     var kmh: Double = UserDefaults.standard.object(forKey: "defaultSpeed") as? Double ?? 8
     var previewRate = 1.0
     var loops = false
+    var realisticMotion = true
     var sessionSaved = false
     @ObservationIgnored private var ticker: Task<Void, Never>?
     deinit { ticker?.cancel() }
@@ -27,13 +28,13 @@ import SwiftData
         cancelTicker(); points = RouteGeometry(new).points; engine.load(points); sessionSaved = false
         if let name { routeName = name }; if let p = points.first { select(p) }
     }
-    private func configure() { engine.kmh = kmh; engine.previewRate = previewRate; engine.loops = loops }
+    private func configure() { engine.kmh = kmh; engine.previewRate = previewRate; engine.loops = loops; engine.realisticMotion = realisticMotion }
     func start() { cancelTicker(); configure(); engine.start(now: ProcessInfo.processInfo.systemUptime); sessionSaved = false; publish(); runTicker() }
     func pause() { engine.pause(now: ProcessInfo.processInfo.systemUptime); cancelTicker(); publish() }
     func resume() { configure(); engine.resume(now: ProcessInfo.processInfo.systemUptime); runTicker() }
     func stop() { engine.stop(now: ProcessInfo.processInfo.systemUptime); cancelTicker(); publish() }
     func reset() { cancelTicker(); engine.reset(); sessionSaved = false; publish() }
-    private func publish() { if let p = engine.position { mock.update(p, speed: engine.state == .running ? engine.kmh/3.6 : 0) } }
+    private func publish() { if let p = engine.simulatedPosition { mock.update(p, speed: engine.state == .running ? engine.currentSpeed : 0) } }
     private func runTicker() {
         guard ticker == nil, engine.state == .running else { return }
         ticker = Task { [weak self] in

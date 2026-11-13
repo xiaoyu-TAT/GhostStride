@@ -45,4 +45,18 @@ final class CoreTests: XCTestCase {
         var e = SimulationEngine(); e.load([a,b]); e.start(now: 20); e.advance(now: 10); e.advance(now: .nan); XCTAssertEqual(e.traveled, 0)
         e.kmh = .nan; e.advance(now: 30); XCTAssertEqual(e.traveled, 0)
     }
+    func testRealisticMotionAcceleratesAndReportsBoundedOffset() {
+        var e = SimulationEngine(); e.load([a,c]); e.kmh = 3.6; e.realisticMotion = true; e.start(now: 0)
+        e.advance(now: 1)
+        XCTAssertGreaterThan(e.currentSpeed, 0)
+        XCTAssertLessThan(e.currentSpeed, 1)
+        XCTAssertNotNil(e.simulatedPosition)
+        XCTAssertLessThanOrEqual(e.position!.distance(to: e.simulatedPosition!), 2)
+    }
+    func testSharpTurnReducesTargetMovementSpeed() {
+        let turn = GeoPoint(latitude: 0, longitude: 0.001)
+        var e = SimulationEngine(); e.load([a, turn, GeoPoint(latitude: 0.001, longitude: 0.001)])
+        e.kmh = 10; e.realisticMotion = true; e.start(now: 0); e.advance(now: 1)
+        XCTAssertLessThan(e.currentSpeed, 10 / 3.6)
+    }
 }

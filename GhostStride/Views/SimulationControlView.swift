@@ -16,6 +16,8 @@ struct SimulationControlView: View {
                 HStack { Text("配速 min/km"); TextField("7.5", value: Binding(get: { MotionUnits.pace(kmh: model.kmh) }, set: { model.kmh = MotionUnits.speed(pace: $0) }), format: .number).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                 Picker("预览倍率", selection: $model.previewRate) { Text("1×").tag(1.0); Text("2×").tag(2.0); Text("5×").tag(5.0) }.pickerStyle(.segmented)
                 Toggle("循环播放", isOn: $model.loops)
+                Toggle("自然运动模拟", isOn: $model.realisticMotion)
+                Text("启用加减速、转弯减速和小幅轨迹扰动，仅用于本应用内测试。").font(.caption).foregroundStyle(.secondary)
             }.disabled(model.engine.state == .running || model.engine.state == .paused)
             Section {
                 HStack {
@@ -47,7 +49,7 @@ struct WorkoutDashboardView: View {
             ProgressView(value: model.geometry.distance > 0 ? min(1, model.engine.lapDistance/model.geometry.distance) : 0)
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
                 GridRow { metric("模拟用时", timeText(model.engine.elapsed)); metric("设定配速", String(format: "%.2f min/km", MotionUnits.pace(kmh: model.kmh))) }
-                GridRow { metric("设定速度", String(format: "%.1f km/h", model.kmh)); metric("本圈剩余", distanceText(model.engine.remaining)) }
+                GridRow { metric("当前速度", String(format: "%.1f km/h", model.engine.currentSpeed * 3.6)); metric("本圈剩余", distanceText(model.engine.remaining)) }
                 GridRow { metric("剩余模拟时间", timeText(model.engine.remainingSeconds)); metric("预览倍率", String(format: "%.0f×", model.previewRate)) }
             }
             if let p = model.engine.position { Text(String(format: "模拟坐标 %.6f, %.6f", p.latitude, p.longitude)).font(.caption).monospacedDigit() }
