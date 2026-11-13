@@ -3,6 +3,7 @@ import MapKit
 import SwiftData
 
 struct LocationPickerView: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \FavoritePlace.name) private var favorites: [FavoritePlace]
@@ -19,6 +20,24 @@ struct LocationPickerView: View {
     @State private var camera: MapCameraPosition = .region(MKCoordinateRegion(center: GeoPoint.beijing.coordinate, span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)))
     var body: some View {
         Form {
+            Section("本机位置") {
+                if let currentPoint = model.currentPoint {
+                    Button {
+                        name = model.useMock ? "虚拟本机位置" : "本机当前位置"
+                        choose(currentPoint)
+                    } label: {
+                        Label(model.useMock ? "使用虚拟本机位置" : "使用本机当前位置", systemImage: "location.fill")
+                    }
+                    Text(model.useMock
+                         ? "当前启用应用内模拟定位，虚拟坐标仅供本应用使用。"
+                         : "使用 Core Location 最近一次提供的本机坐标。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(model.useMock ? "尚未设置虚拟本机位置。" : "尚未取得本机位置，请先授权定位。")
+                        .foregroundStyle(.secondary)
+                }
+            }
             Section("地图选点") {
                 MapReader { proxy in
                     Map(position: $camera) { if let point { Marker("选点", coordinate: point.coordinate) } }

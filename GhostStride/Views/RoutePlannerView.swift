@@ -21,6 +21,22 @@ struct RoutePlannerView: View {
                 }.onDelete { stops.remove(atOffsets: $0) }.onMove { stops.move(fromOffsets: $0, toOffset: $1) }
                 Button("添加地点", systemImage: "plus") { editingIndex = nil; picker = true }.disabled(stops.count >= 25)
             }.disabled(loading)
+            Section("本机位置") {
+                Button("将本机位置设为起点", systemImage: "location.fill") {
+                    guard let currentPoint = model.currentPoint else { return }
+                    if stops.isEmpty {
+                        stops = [currentPoint]
+                    } else {
+                        stops[0] = currentPoint
+                    }
+                }
+                .disabled(loading || model.currentPoint == nil)
+                Text(model.useMock
+                     ? "当前本机位置来自应用内虚拟定位，仅影响 GhostStride。"
+                     : "当前本机位置来自 Core Location。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("路线选项") {
                 Toggle("优先选择较长备选步行路线", isOn: $alternative)
                 Text("多段路线逐段规划；仅有一条路线时使用该路线。地图服务需要网络，区域可用性由 Apple 决定。").font(.caption).foregroundStyle(.secondary)

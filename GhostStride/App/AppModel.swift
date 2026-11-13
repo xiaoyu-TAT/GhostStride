@@ -19,6 +19,7 @@ import SwiftData
     deinit { ticker?.cancel() }
     var sample: LocationSample? { useMock ? mock.sample : real.sample }
     var sourceName: String { useMock ? mock.sourceName : real.sourceName }
+    var currentPoint: GeoPoint? { sample?.point }
     var geometry: RouteGeometry { engine.geometry }
     func switchSource() { if useMock { real.stop(); mock.start() } else { real.start(); mock.stop() } }
     func select(_ p: GeoPoint) { selected = p; if useMock && engine.state != .running { mock.update(p, speed: 0) } }

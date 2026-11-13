@@ -49,7 +49,17 @@ struct MapHomeView: View {
                     HStack {
                         Text(model.sourceName).font(.caption.bold()).padding(8).background(.regularMaterial, in: Capsule())
                         Spacer()
-                        Button { model.useMock = false; model.switchSource(); if let p = model.real.sample?.point { focus(p) } } label: { Image(systemName: "location.fill").padding(12).background(.regularMaterial, in: Circle()) }.accessibilityLabel("获取真实位置")
+                        Button {
+                            if let p = model.currentPoint {
+                                focus(p)
+                            } else if !model.useMock {
+                                model.useMock = false
+                                model.switchSource()
+                            }
+                        } label: {
+                            Image(systemName: "location.fill").padding(12).background(.regularMaterial, in: Circle())
+                        }
+                        .accessibilityLabel(model.useMock ? "定位到虚拟本机位置" : "获取本机位置")
                     }
                     if let message = model.real.message, !model.useMock { Text(message).font(.caption).padding(8).background(.regularMaterial) }
                 }.padding()
